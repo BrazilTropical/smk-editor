@@ -57,22 +57,10 @@ void editorProcessKeyPress()
 			clearAndReposition();
 			exit(0);
 			break;
-		case 'a':
-		case 'w':
-		case 's':
-		case 'd':
-		case 'A':
-		case 'W':
-		case 'S':
-		case 'D':
-		case 'j':
-		case 'J':
-		case 'k':
-		case 'K':
-		case 'h':
-		case 'H':
-		case 'l':
-		case 'L':
+		case 'a':case 'A':case 's':case 'S':
+		case 'w':case 'W':case 'd':case 'D':
+		case 'j':case 'J':case 'k':case 'K':
+		case 'h':case 'H':case 'l':case 'L':
 			editorMoveCursor(c);
 			break;
 
@@ -144,7 +132,7 @@ void editorDrawRows(struct appendBuffer *ab) {
 		{
 			char welcome[80];
 			int welcomelen = snprintf(welcome, sizeof(welcome),
-				"smk editor based on Kilo -- version %s", VERSION);
+				"smk editor -- version %s", VERSION);
 			if(welcomelen > Editor.screenColumns)
 				welcomelen = Editor.screenColumns;
 
@@ -207,28 +195,16 @@ void editorMoveCursor(char key)
 {
 	switch(key)
 	{
-		case 'A':
-		case 'a':
-		case 'h':
-		case 'H':
+		case 'A':case 'a':case 'h':case 'H':
 			Editor.cursorX--;
 			break;
-		case 'W':
-		case 'w':
-		case 'k':
-		case 'K':
+		case 'W':case 'w':case 'k':case 'K':
 			Editor.cursorY--;
 			break;
-		case 'S':
-		case 's':
-		case 'j':
-		case 'J':
+		case 'S':case 's':case 'j':case 'J':
 			Editor.cursorY++;
 			break;
-		case 'D':
-		case 'd':
-		case 'l':
-		case 'L':
+		case 'D':case 'd':case 'l':case 'L':
 			Editor.cursorX++;
 			break;
 	}
