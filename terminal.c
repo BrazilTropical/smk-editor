@@ -54,7 +54,8 @@ void editorOpen(char *filename)
 	Editor.filename = strdup(filename);
 
 	FILE *fp = fopen(filename, "r");
-	if(!fp)
+	FILE *fp2 = fopen("a.txt", "wr+");
+	if(!fp || !fp2)
 		die("File");
 
 	char *line = NULL;
@@ -97,7 +98,14 @@ char *editorRowsToString(int *bufferLen)
 void editorSave()
 {
 	if(Editor.filename == NULL)
-		return; 
+	{
+		Editor.filename = editorPrompt("Save as: %s");
+		if(Editor.filename == NULL)
+		{
+			editorSetStatusMessage("Save aborted");
+			return;
+		}
+	}
 
 	int len;
 	char *buf = editorRowsToString(&len);
@@ -123,6 +131,53 @@ void editorSave()
 //*************///
 //*** Input	***///
 //*************///
+
+char *editorPrompt(char* prompt)
+{
+	size_t bufferSize = 128;
+	char *buf = malloc(bufferSize);
+
+	size_t bufferLen = 0;
+	buf[0] = '\0';
+
+	while(1)
+	{
+		editorSetStatusMessage(prompt, buf);
+		editorRefreshScreen();
+		int c = editorReadKey();
+
+		if(c == DEL_KEY || c == CTRL_KEY('h') || c == BACKSPACE)
+		{
+			if(bufferLen != 0)
+				buf[--bufferLen] = '\0';
+		}
+		else if(c == '\x1b')
+		{
+			editorSetStatusMessage("");
+			free(buf);
+			return NULL;
+		}
+		else if(c == '\r')
+		{
+			if(bufferLen != 0)
+			{
+				editorSetStatusMessage("");
+				return buf;
+			}
+		}
+		else if (!iscntrl(c) && c < 128)
+		{
+			if(bufferLen == bufferSize - 1)
+			{
+				bufferSize *= 2;
+				buf = realloc(buf, bufferSize);
+			}
+			buf[bufferLen++] = c;
+			buf[bufferLen] = '\0';
+		}
+	}
+
+}
 
 //Reads key and desides what to do
 //\x1b is an escape code
@@ -343,13 +398,9 @@ void editorDrawRows(struct appendBuffer *ab) {
 					appendBufferAppend(ab, " ", 1);
 
 				appendBufferAppend(ab, welcome, welcomelen);
-			} else
+			} 
+			else
 				appendBufferAppend(ab, "~", 1);
-
-			appendBufferAppend(ab, "\x1b[K", 3);
-			
-			if (y < Editor.screenRows - 1) 
-				appendBufferAppend(ab, "\r\n", 2);
 		}	
 		else
 		{
@@ -489,6 +540,7 @@ void editorFreeRow(erow *row)
 	free(row->chars);
 }
 
+//Deletes row using memmove
 void editorDelRow(int at)
 {
 	if(at < 0 || at >= Editor.numRows)
@@ -499,6 +551,7 @@ void editorDelRow(int at)
 	Editor.dirty = 1;
 }
 
+//Deletes a char from a row. A row is a erow* and char located at "at"
 void editorRowDelChar(erow *row, int at)
 {
 	if(at < 0 || at >= row->size)
@@ -509,6 +562,7 @@ void editorRowDelChar(erow *row, int at)
 	Editor.dirty = 1;
 }
 
+//called to delete a char
 void editorDelChar()
 {
 	if(Editor.cursorY == Editor.numRows)
@@ -531,6 +585,7 @@ void editorDelChar()
 	}
 }
 
+//appends remaining text from a row to the row above when deleting the first char of a line
 void editorRowAppendString(erow *row, char *s, size_t len)
 {
 	row->chars = realloc(row->chars, row->size + len + 1);
@@ -570,6 +625,8 @@ void editorUpdateRow(erow *row)
 	row->rowSize = idx; 
 }
 
+//converts a chars index to a render index
+//used to indent tabs
 int editorRowCursorXToRowX(erow *row, int cursorX)
 {
 	int rowX = 0;
@@ -584,6 +641,7 @@ int editorRowCursorXToRowX(erow *row, int cursorX)
 	return rowX;
 }
 
+//draws status bar, when a file is modified the dirty flag is 1 and thus showing (modified) on status bar
 void editorDrawStatusBar(struct appendBuffer *ab)
 {
 	appendBufferAppend(ab, "\x1b[7m", 4);

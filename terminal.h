@@ -4,6 +4,7 @@
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <string.h>
+#include <ctype.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -65,6 +66,7 @@ void editorFreeRow(erow *row);
 void editorMoveCursor(int key);
 void editorUpdateRow(erow *row);
 void editorOpen(char *filename);
+char *editorPrompt(char* prompt);
 void editorRowDelChar(erow *row, int at);
 char *editorRowsToString(int *bufferLen);
 void getWindowSize(int *rows, int *cols);
