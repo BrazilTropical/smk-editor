@@ -1,6 +1,7 @@
 #include "terminal.h"
 
 #define CTRL_KEY(k) ((k) & 0x1f)	//CTRL + q to quit
+#define TAB_SIZE 4
 #define ABUF_INIT 	{NULL, 0}
 #define VERSION "0.0.0"
 
@@ -16,25 +17,6 @@ enum editorKey
 	END_KEY,
 	PAGE_UP,
 	PAGE_DOWN
-};
-
-//Struct for a row
-typedef struct erow
-{
-	int size;
-	char *chars;
-} erow;
-
-struct editorConf
-{
-	int cursorX, cursorY;
-	int rowOffset;
-	int columnOffset;
-	int screenRows;
-	int screenColumns;
-	int numRows;
-	erow *row;
-	struct termios orig_termios;
 };
 
 struct editorConf Editor;
@@ -201,6 +183,11 @@ void editorAppendRow(char *string, size_t len)
 	Editor.row[at].chars = malloc(len + 1);
 	memcpy(Editor.row[at].chars, string, len);
 	Editor.row[at].chars[len] = '\0';
+
+	Editor.row[at].rowSize = 0;
+	Editor.row[at].render = NULL;
+	editorUpdateRow(&Editor.row[at]);
+
 	Editor.numRows++;
 }
 //kills on error
@@ -261,7 +248,7 @@ void editorDrawRows(struct appendBuffer *ab) {
 	for (y = 0; y < Editor.screenRows; ++y) 
 	{
 		int fileRow = y + Editor.rowOffset;
-		if(y >= Editor.numRows)
+		if(fileRow >= Editor.numRows)
 		{
 			if(Editor.numRows == 0 && y == Editor.screenRows / 3)
 			{
@@ -293,24 +280,36 @@ void editorDrawRows(struct appendBuffer *ab) {
 		}	
 		else
 		{
-			int len = Editor.row[fileRow].size - Editor.columnOffset;
+			int len = Editor.row[fileRow].rowSize - Editor.columnOffset;
 			if(len < 0)
 				len = 0;
-			appendBufferAppend(ab, &Editor.row[fileRow].chars[Editor.columnOffset], len);
-		}	
+			if(len > Editor.screenColumns)
+				len = Editor.screenColumns;
+
+			appendBufferAppend(ab, &Editor.row[fileRow].render[Editor.columnOffset], len);
+		}
+
+		appendBufferAppend(ab, "\x1b[K", 3);
+		if(y < Editor.screenRows - 1)
+			appendBufferAppend(ab, "\r\n", 2);
 	}
 }
 
 void editorScroll()
 {
+	Editor.rowX = Editor.cursorX;
+
+	if(Editor.cursorY < Editor.numRows)
+		Editor.rowX = editorRowCursorXToRowX(&Editor.row[Editor.cursorX], Editor.cursorX);
+
 	if(Editor.cursorY < Editor.rowOffset)
 		Editor.rowOffset = Editor.cursorY;
 	if(Editor.cursorY >= Editor.rowOffset + Editor.screenRows)
 		Editor.rowOffset = Editor.cursorY - Editor.screenRows + 1; 
-	if(Editor.cursorX < Editor.columnOffset)
-		Editor.columnOffset = Editor.cursorX;
-	if(Editor.cursorX >= Editor.columnOffset + Editor.screenColumns)
-		Editor.columnOffset = Editor.cursorX - Editor.screenColumns + 1;
+	if(Editor.rowX < Editor.columnOffset)
+		Editor.columnOffset = Editor.rowX;
+	if(Editor.rowX >= Editor.columnOffset + Editor.screenColumns)
+		Editor.columnOffset = Editor.rowX - Editor.screenColumns + 1;
 }
 
 void editorRefreshScreen() 
@@ -327,7 +326,7 @@ void editorRefreshScreen()
 	char buf[32];
 
 	snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (Editor.cursorY - Editor.rowOffset) + 1, 
-											  (Editor.cursorX -  Editor.columnOffset) + 1);
+											  (Editor.rowX -  Editor.columnOffset) + 1);
 	
 	appendBufferAppend(&ab, buf, strlen(buf));
 	
@@ -335,6 +334,49 @@ void editorRefreshScreen()
 
 	write(STDOUT_FILENO, ab.buffer, ab.len);
 	appendBufferFree(&ab);
+}
+
+void editorUpdateRow(erow *row)
+{
+	int tabs = 0;
+	int j;
+
+	for(j = 0; j < row->size; ++j)
+		if(row->chars[j] == '\t')
+			tabs++;
+
+	free(row->render);
+	row->render = malloc(row->size + tabs * (TAB_SIZE - 1) + 1);
+	int idx = 0;
+	for(j = 0; j < row->size; ++j)
+	{
+		if(row->chars[j] == '\t')
+		{
+			row->render[idx++] = ' ';
+			while(idx % TAB_SIZE != 0)
+				row->render[idx++] = ' ';
+		}
+		else
+		{
+			row->render[idx++] = row->chars[j];
+		}
+	}
+	row->render[idx] = '\0';
+	row->rowSize = idx; 
+}
+
+int editorRowCursorXToRowX(erow *row, int cursorX)
+{
+	int rowX = 0;
+	int j;
+
+	for(j = 0; j < cursorX; ++j)
+	{
+		if(row->chars[j] == '\t')
+			rowX += (TAB_SIZE - 1) - (rowX % TAB_SIZE);
+		rowX++;
+	}
+	return rowX;
 }
 
 //Clears screen and repositions cursor at the top;
@@ -396,6 +438,7 @@ void initEditor()
 	Editor.cursorY = 0;
 	Editor.numRows = 0;
 	Editor.rowOffset = 0;
+	Editor.rowX = 0;
 	Editor.columnOffset = 0;
 	Editor.row = NULL;
 	getWindowSize(&Editor.screenRows, &Editor.screenColumns);
