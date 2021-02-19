@@ -9,7 +9,7 @@ int main(int argc, char** argv)
 	if(argc >= 2)
 		editorOpen(argv[1]);
 
-	editorSetStatusMessage("HELP: CTRL S = save | CTRL Q = quit");
+	editorSetStatusMessage("HELP: CTRL S = save | CTRL Q = quit | CTRL F = find");
 
 	while(1)
 	{

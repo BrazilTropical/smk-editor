@@ -54,8 +54,7 @@ void editorOpen(char *filename)
 	Editor.filename = strdup(filename);
 
 	FILE *fp = fopen(filename, "r");
-	FILE *fp2 = fopen("a.txt", "wr+");
-	if(!fp || !fp2)
+	if(!fp)
 		die("File");
 
 	char *line = NULL;
@@ -71,6 +70,18 @@ void editorOpen(char *filename)
 	free(line);
 	fclose(fp);
 	Editor.dirty = 0;
+}
+
+void editorOpenPromptFile()
+{
+	char *filename = editorPrompt("File name: %s", NULL);
+	if(filename)
+	{
+		initEditor();
+		editorOpen(filename);
+		editorRefreshScreen();
+		free(filename);
+	}
 }
 
 char *editorRowsToString(int *bufferLen)
@@ -99,7 +110,7 @@ void editorSave()
 {
 	if(Editor.filename == NULL)
 	{
-		Editor.filename = editorPrompt("Save as: %s");
+		Editor.filename = editorPrompt("Save as: %s (ESC to cancel)", NULL);
 		if(Editor.filename == NULL)
 		{
 			editorSetStatusMessage("Save aborted");
@@ -132,7 +143,7 @@ void editorSave()
 //*** Input	***///
 //*************///
 
-char *editorPrompt(char* prompt)
+char *editorPrompt(char* prompt, void(*callback)(char*, int))
 {
 	size_t bufferSize = 128;
 	char *buf = malloc(bufferSize);
@@ -154,6 +165,8 @@ char *editorPrompt(char* prompt)
 		else if(c == '\x1b')
 		{
 			editorSetStatusMessage("");
+			if(callback)
+				callback(buf, c);
 			free(buf);
 			return NULL;
 		}
@@ -162,6 +175,8 @@ char *editorPrompt(char* prompt)
 			if(bufferLen != 0)
 			{
 				editorSetStatusMessage("");
+				if(callback)
+					callback(buf, c);
 				return buf;
 			}
 		}
@@ -175,8 +190,9 @@ char *editorPrompt(char* prompt)
 			buf[bufferLen++] = c;
 			buf[bufferLen] = '\0';
 		}
+		if(callback)
+			callback(buf, c);
 	}
-
 }
 
 //Reads key and desides what to do
@@ -267,6 +283,12 @@ void editorProcessKeyPress()
 			break;	
 		case CTRL_KEY('s'):
 			editorSave();
+			break;
+		case CTRL_KEY('o'):
+			editorOpenPromptFile();
+			break;
+		case CTRL_KEY('f'):
+			editorFind();
 			break;
 		case HOME_KEY:
 			Editor.cursorX = 0;
@@ -373,6 +395,7 @@ void getWindowSize(int *rows, int *cols)
 
 void editorDrawRows(struct appendBuffer *ab) {
 	int y;
+
 	for (y = 0; y < Editor.screenRows; ++y) 
 	{
 		int fileRow = y + Editor.rowOffset;
@@ -410,7 +433,20 @@ void editorDrawRows(struct appendBuffer *ab) {
 			if(len > Editor.screenColumns)
 				len = Editor.screenColumns;
 
-			appendBufferAppend(ab, &Editor.row[fileRow].render[Editor.columnOffset], len);
+			//colors
+			char *c = &Editor.row[fileRow].render[Editor.columnOffset];
+			int j;
+			for(j = 0; j < len; ++j)
+			{
+				if(isdigit(c[j]))
+				{
+					appendBufferAppend(ab, "\x1b[31m", 5);	//red
+					appendBufferAppend(ab, &c[j], 1);		//digit
+					appendBufferAppend(ab, "\x1b[39m", 5);	//white
+				}
+				else
+					appendBufferAppend(ab, &c[j], 1);
+			}
 		}
 
 		appendBufferAppend(ab, "\x1b[K", 3);
@@ -438,6 +474,7 @@ void editorScroll()
 
 void editorRefreshScreen() 
 {
+
 	editorScroll();
 
 	struct appendBuffer ab = ABUF_INIT;
@@ -448,7 +485,6 @@ void editorRefreshScreen()
 	editorDrawRows(&ab);
 	editorDrawStatusBar(&ab);
 	editorDrawMessageBar(&ab);
-
 	char buf[32];
 
 	snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (Editor.cursorY - Editor.rowOffset) + 1, 
@@ -641,6 +677,24 @@ int editorRowCursorXToRowX(erow *row, int cursorX)
 	return rowX;
 }
 
+int editorRowRenderXToCursorX(erow *row, int renderX)
+{
+	int cur_rx = 0;
+	int cx;
+	for(cx = 0; cx < row->size; ++cx)
+	{
+		if(row->chars[cx] == '\t')
+		{
+			cur_rx += (TAB_SIZE - 1) - (cur_rx & TAB_SIZE);
+		}
+		cur_rx++;
+		
+		if(cur_rx > renderX)
+			return cx;
+	}
+	return cx;
+}
+
 //draws status bar, when a file is modified the dirty flag is 1 and thus showing (modified) on status bar
 void editorDrawStatusBar(struct appendBuffer *ab)
 {
@@ -727,6 +781,79 @@ void editorMoveCursor(int key)
 		Editor.cursorX = rowLen;
 }
 
+void editorFindCallback(char *query, int key)
+{
+	static int lastMatch = -1;
+	static int direction = 1;
+
+	if(key == '\r' || key == '\x1b')
+	{
+		lastMatch = -1;
+		direction = 1;
+	}
+	else if(key == ARROW_RIGHT || key == ARROW_DOWN)	//go next, down
+	{
+		direction = 1;
+	}
+	else if(key == ARROW_LEFT || key == ARROW_UP)		//go prev, up
+	{
+		direction = -1;
+	}
+	else
+	{
+		lastMatch = -1;
+		direction = 1;
+	}
+
+	if(lastMatch == -1)
+		direction = 1;
+
+	int current = lastMatch;
+	int i;
+	for(i = 0; i < Editor.numRows; ++i)
+	{
+		current += direction;
+
+		if(current == -1)
+			current = Editor.numRows - 1;
+		else if(current == Editor.numRows)
+			current = 0;
+
+		erow *row = &Editor.row[current];		
+		char *match = strstr(row->render, query);
+		if(match)
+		{
+			lastMatch = current;
+			Editor.cursorY = current;
+			Editor.cursorX = editorRowRenderXToCursorX(row, match - row->render);
+			Editor.rowOffset = Editor.numRows;
+			break;
+		}
+	}
+}
+
+void editorFind()
+{
+	int savedCursorX = Editor.cursorX;		//save pos, before moving to find
+	int savedCursorY = Editor.cursorY;
+	int savedColumnOff = Editor.columnOffset;
+	int savedRowOff = Editor.rowOffset;
+
+	char* query = editorPrompt("Search: %s (ESC to cancel)", editorFindCallback);
+
+	if(query)
+	{
+		free(query);
+	}
+	else
+	{
+		Editor.cursorX = savedCursorX;
+		Editor.cursorY = savedCursorY;
+		Editor.columnOffset = savedColumnOff;
+		Editor.rowOffset = savedRowOff;
+	}
+}
+
 
 /////////////////////////////////////////////////////////////////////////////////////
 //*************///
@@ -739,6 +866,7 @@ void initEditor()
 	Editor.cursorY = 0;
 	Editor.numRows = 0;
 	Editor.rowOffset = 0;
+	Editor.openNewFile = 0;
 	Editor.rowX = 0;
 	Editor.columnOffset = 0;
 	Editor.row = NULL;
