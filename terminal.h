@@ -1,11 +1,14 @@
-#define _DEFAULT_SOURCE
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <string.h>
+#include <fcntl.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <termios.h>
+#include <time.h>
 #include <sys/types.h>
 
 #ifndef FUNCTIONS_H_INCLUDED
@@ -36,27 +39,43 @@ struct editorConf
 	int screenColumns;
 	int numRows;
 	char* filename;
+	int dirty;
+	char statusmsg[80];
+	time_t statusmsg_time;
 	erow *row;
 	struct termios orig_termios;
 };
 
+void editorSave();
 void initEditor();
 int editorReadKey();
 void editorScroll();
+void editorDelChar();
 void enableRawMode();
 void disableRawMode();
+void pageUpDown(int c);
 void die(const char *s);
 void clearAndReposition();
+void editorDelRow(int at);
+void editorInsertNewLine();
 void editorRefreshScreen();
 void editorProcessKeyPress();
+void editorInsertChar(int c);
+void editorFreeRow(erow *row);
 void editorMoveCursor(int key);
 void editorUpdateRow(erow *row);
 void editorOpen(char *filename);
+void editorRowDelChar(erow *row, int at);
+char *editorRowsToString(int *bufferLen);
 void getWindowSize(int *rows, int *cols);
 void editorDrawRows(struct appendBuffer *ab);
 void appendBufferFree(struct appendBuffer *ab);
-void editorAppendRow(char *string, size_t len);
+void editorInsertRow(int at, char *string, size_t len);
+void editorSetStatusMessage(const char *fmt, ...);
 void editorDrawStatusBar(struct appendBuffer *ab);
+void editorRowInsertChar(erow *row, int at, int c);
 int editorRowCursorXToRowX(erow *row, int cursorX);
+void editorDrawMessageBar(struct appendBuffer *ab);
+void editorRowAppendString(erow *row, char *s, size_t len);
 void appendBufferAppend(struct appendBuffer *ab, const char *s, int len);
 #endif
