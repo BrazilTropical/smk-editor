@@ -1,6 +1,6 @@
 #include "terminal.h"
 
-#define CTRL_KEY(k) ((k) & 0x1f)	//CTRL + q to quit
+#define CTRL_KEY(k) ((k) & 0x1f)//CTRL + q to quit
 #define TAB_SIZE 4
 #define ABUF_INIT 	{NULL, 0}
 #define VERSION "0.0.0"
@@ -48,6 +48,9 @@ void appendBufferFree(struct appendBuffer *ab)
 //Opens a file with name from command line
 void editorOpen(char *filename)
 {
+	free(Editor.filename);
+	Editor.filename = strdup(filename);
+
 	FILE *fp = fopen(filename, "r");
 	if(!fp)
 		die("File");
@@ -108,8 +111,6 @@ int editorReadKey()
 						case '4': return END_KEY;	//[4~
 						case '5': return PAGE_UP;	//[5~
 						case '6': return PAGE_DOWN;	//[6~
-						case '7': return HOME_KEY;	//numpad
-						case '8': return END_KEY;	//numpad
 					}
 			}else
 				switch(seq[1])
@@ -152,11 +153,20 @@ void editorProcessKeyPress()
 			Editor.cursorX = 0;
 			break;
 		case END_KEY:
-			Editor.cursorX = Editor.screenColumns - 1;	
+			if(Editor.cursorY < Editor.numRows)
+				Editor.cursorX = Editor.row[Editor.cursorY].size;	
 			break;
 		case PAGE_UP:
 		case PAGE_DOWN:
 			{
+				if(c == PAGE_UP)
+					Editor.cursorY = Editor.rowOffset;
+				else if(c == PAGE_DOWN)
+				{
+					Editor.cursorY = Editor.rowOffset + Editor.screenRows - 1;
+					if (Editor.cursorY > Editor.numRows)
+						Editor.cursorY = Editor.numRows;
+				}
 				int times = Editor.screenRows;
 				while(times--)
 					editorMoveCursor(c == PAGE_UP ? ARROW_UP: ARROW_DOWN);
@@ -290,22 +300,22 @@ void editorDrawRows(struct appendBuffer *ab) {
 		}
 
 		appendBufferAppend(ab, "\x1b[K", 3);
-		if(y < Editor.screenRows - 1)
-			appendBufferAppend(ab, "\r\n", 2);
+		appendBufferAppend(ab, "\r\n", 2);
 	}
 }
 
 void editorScroll()
 {
-	Editor.rowX = Editor.cursorX;
+	Editor.rowX = 0;
 
 	if(Editor.cursorY < Editor.numRows)
-		Editor.rowX = editorRowCursorXToRowX(&Editor.row[Editor.cursorX], Editor.cursorX);
+		Editor.rowX = editorRowCursorXToRowX(&Editor.row[Editor.cursorY], Editor.cursorX);
 
 	if(Editor.cursorY < Editor.rowOffset)
 		Editor.rowOffset = Editor.cursorY;
 	if(Editor.cursorY >= Editor.rowOffset + Editor.screenRows)
 		Editor.rowOffset = Editor.cursorY - Editor.screenRows + 1; 
+
 	if(Editor.rowX < Editor.columnOffset)
 		Editor.columnOffset = Editor.rowX;
 	if(Editor.rowX >= Editor.columnOffset + Editor.screenColumns)
@@ -322,6 +332,7 @@ void editorRefreshScreen()
 	appendBufferAppend(&ab, "\x1b[H", 3);
 
 	editorDrawRows(&ab);
+	editorDrawStatusBar(&ab);
 	
 	char buf[32];
 
@@ -377,6 +388,26 @@ int editorRowCursorXToRowX(erow *row, int cursorX)
 		rowX++;
 	}
 	return rowX;
+}
+
+void editorDrawStatusBar(struct appendBuffer *ab)
+{
+	appendBufferAppend(ab, "\x1b[7m", 4);
+	char status[80];
+	int len = snprintf(status, sizeof(status), "%.20s - %d lines",
+				Editor.filename ? Editor.filename : "[No Name]", Editor.numRows);
+	
+	if(len > Editor.screenColumns)
+		len = Editor.screenColumns;
+
+	appendBufferAppend(ab, status, len);
+	while(len < Editor.screenColumns)
+	{
+		appendBufferAppend(ab, " ", 1);
+		len++;
+	}
+	appendBufferAppend(ab, "\x1b[m", 3);
+
 }
 
 //Clears screen and repositions cursor at the top;
@@ -441,5 +472,7 @@ void initEditor()
 	Editor.rowX = 0;
 	Editor.columnOffset = 0;
 	Editor.row = NULL;
+	Editor.filename = NULL;
 	getWindowSize(&Editor.screenRows, &Editor.screenColumns);
+	Editor.screenRows--;
 }

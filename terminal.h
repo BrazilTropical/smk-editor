@@ -35,6 +35,7 @@ struct editorConf
 	int screenRows;
 	int screenColumns;
 	int numRows;
+	char* filename;
 	erow *row;
 	struct termios orig_termios;
 };
@@ -55,6 +56,7 @@ void getWindowSize(int *rows, int *cols);
 void editorDrawRows(struct appendBuffer *ab);
 void appendBufferFree(struct appendBuffer *ab);
 void editorAppendRow(char *string, size_t len);
+void editorDrawStatusBar(struct appendBuffer *ab);
 int editorRowCursorXToRowX(erow *row, int cursorX);
 void appendBufferAppend(struct appendBuffer *ab, const char *s, int len);
 #endif
