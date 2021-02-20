@@ -34,6 +34,7 @@ struct editorConf
 {
 	int cursorX, cursorY;
 	int typeLineNumber;
+	int lineNumberSize;
 	int rowX;
 	int rowOffset;
 	int columnOffset;
@@ -83,7 +84,7 @@ void editorRowInsertChar(erow *row, int at, int c);
 int editorRowCursorXToRowX(erow *row, int cursorX);
 void editorDrawMessageBar(struct appendBuffer *ab);
 int editorRowRenderXToCursorX(erow *row, int renderX);
-void addLineNumber(struct appendBuffer *ab, int posY);
+int addLineNumber(struct appendBuffer *ab, int posY);
 void editorInsertRow(int at, char *string, size_t len);
 void editorRowAppendString(erow *row, char *s, size_t len);
 char *editorPrompt(char* prompt, void(*callback)(char*, int));
