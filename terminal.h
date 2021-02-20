@@ -33,7 +33,7 @@ typedef struct erow
 struct editorConf
 {
 	int cursorX, cursorY;
-	int openNewFile;
+	int typeLineNumber;
 	int rowX;
 	int rowOffset;
 	int columnOffset;
@@ -60,12 +60,14 @@ void pageUpDown(int c);
 void die(const char *s);
 void clearAndReposition();
 void editorDelRow(int at);
+void editorSetLineNumber();
 void editorInsertNewLine();
 void editorRefreshScreen();
 void editorOpenPromptFile();
 void editorProcessKeyPress();
 void editorInsertChar(int c);
 void editorFreeRow(erow *row);
+char* itoa(int val, int base);
 void editorMoveCursor(int key);
 void editorUpdateRow(erow *row);
 void editorOpen(char *filename);
@@ -81,6 +83,7 @@ void editorRowInsertChar(erow *row, int at, int c);
 int editorRowCursorXToRowX(erow *row, int cursorX);
 void editorDrawMessageBar(struct appendBuffer *ab);
 int editorRowRenderXToCursorX(erow *row, int renderX);
+void addLineNumber(struct appendBuffer *ab, int posY);
 void editorInsertRow(int at, char *string, size_t len);
 void editorRowAppendString(erow *row, char *s, size_t len);
 char *editorPrompt(char* prompt, void(*callback)(char*, int));

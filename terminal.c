@@ -5,6 +5,10 @@
 #define ABUF_INIT 	{NULL, 0}
 #define QUIT_TIMES 3
 #define VERSION "0.0.0"
+#define ABSOLUTE 1
+#define RELATIVE 0
+#define OFF -1
+#define SIZE(x) sizeof(x) / sizeof(x[0])
 
 //Special Keys, Starting at 1000 so to not intervere with other common keys 
 enum editorKey
@@ -81,6 +85,22 @@ void editorOpenPromptFile()
 		editorOpen(filename);
 		editorRefreshScreen();
 		free(filename);
+	}
+}
+
+void editorSetLineNumber()
+{
+	char* type = editorPrompt("Type of line number (absolute/relative/off): ", NULL);
+
+	if(type)
+	{
+		if(strcmp(type, "abs") == 0)
+			Editor.typeLineNumber = ABSOLUTE;
+		if(strcmp(type, "rel") == 0)
+			Editor.typeLineNumber = RELATIVE;
+		if(strcmp(type, "off") == 0)
+			Editor.typeLineNumber = OFF;
+		free(type);
 	}
 }
 
@@ -287,6 +307,9 @@ void editorProcessKeyPress()
 		case CTRL_KEY('o'):
 			editorOpenPromptFile();
 			break;
+		case CTRL_KEY('k'):
+			editorSetLineNumber();
+			break;
 		case CTRL_KEY('f'):
 			editorFind();
 			break;
@@ -393,12 +416,38 @@ void getWindowSize(int *rows, int *cols)
 //** Output  **///
 //*************///
 
+void addLineNumber(struct appendBuffer *ab, int posY)
+{
+	char lineNumber[Editor.numRows];
+	char* numRowsToASCII = itoa(Editor.numRows, 10);
+	int padding = strlen(numRowsToASCII);
+
+	if(Editor.typeLineNumber == ABSOLUTE)
+		sprintf(lineNumber, "%d", posY);
+	else if(Editor.typeLineNumber == RELATIVE)
+		sprintf(lineNumber, "%d", abs(Editor.cursorY - posY));
+
+	while(padding-- != (int)strlen(lineNumber))
+		appendBufferAppend(ab, " ", 1);
+
+	appendBufferAppend(ab, lineNumber, 4);
+	appendBufferAppend(ab, " ", 1);
+}
+
 void editorDrawRows(struct appendBuffer *ab) {
 	int y;
+	int printTilde = 1;
 
 	for (y = 0; y < Editor.screenRows; ++y) 
 	{
 		int fileRow = y + Editor.rowOffset;
+
+		if(Editor.typeLineNumber != -1)
+		{
+			addLineNumber(ab, fileRow);
+			printTilde = 0;
+		}
+
 		if(fileRow >= Editor.numRows)
 		{
 			if(Editor.numRows == 0 && y == Editor.screenRows / 3)
@@ -422,7 +471,7 @@ void editorDrawRows(struct appendBuffer *ab) {
 
 				appendBufferAppend(ab, welcome, welcomelen);
 			} 
-			else
+			else if(printTilde)
 				appendBufferAppend(ab, "~", 1);
 		}	
 		else
@@ -474,7 +523,6 @@ void editorScroll()
 
 void editorRefreshScreen() 
 {
-
 	editorScroll();
 
 	struct appendBuffer ab = ABUF_INIT;
@@ -865,8 +913,8 @@ void initEditor()
 	Editor.cursorX = 0;
 	Editor.cursorY = 0;
 	Editor.numRows = 0;
+	Editor.typeLineNumber = -1;
 	Editor.rowOffset = 0;
-	Editor.openNewFile = 0;
 	Editor.rowX = 0;
 	Editor.columnOffset = 0;
 	Editor.row = NULL;
@@ -876,4 +924,20 @@ void initEditor()
 	Editor.dirty = 0;
 	getWindowSize(&Editor.screenRows, &Editor.screenColumns);
 	Editor.screenRows -= 2;
+}
+
+
+char* itoa(int val, int base)
+{
+	
+	static char buf[32] = {0};
+	
+	int i = 30;
+	
+	for(; val && i ; --i, val /= base)
+	
+		buf[i] = "0123456789abcdef"[val % base];
+	
+	return &buf[i+1];
+	
 }
