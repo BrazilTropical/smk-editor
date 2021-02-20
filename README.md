@@ -1,2 +1,2 @@
 # smk-editor
-My simple terminal text editor based on Kilo
+Editor based on the Kilo editor made by /antirez.
