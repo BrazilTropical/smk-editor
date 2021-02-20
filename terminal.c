@@ -334,6 +334,7 @@ void editorProcessKeyPress()
 		case ARROW_DOWN:
 		case ARROW_LEFT:
 		case ARROW_UP:
+			editorRefreshScreen();
 			editorMoveCursor(c);
 			break;
 		case CTRL_KEY('l'):
@@ -418,25 +419,26 @@ void getWindowSize(int *rows, int *cols)
 
 int addLineNumber(struct appendBuffer *ab, int posY)
 {
-	char lineNumber[Editor.numRows];
 	char* numRowsToASCII = itoa(Editor.numRows, 10);
-	int padding = strlen(numRowsToASCII);
-	int p = padding;
-	Editor.cursorX = p;
+	int numDigitsPadding = strlen(numRowsToASCII);
 
-	while(padding-- != (int)strlen(lineNumber))
-		appendBufferAppend(ab, " ", 1);
+	char* lineNumber = malloc(numDigitsPadding);
+
+	int numAbs = abs(posY - Editor.cursorY);
 
 	if(Editor.typeLineNumber == ABSOLUTE)
-		sprintf(lineNumber, "%d", posY);
+		sprintf(lineNumber, "%*d", numDigitsPadding, posY); 	//%*d, relativePadding, d
 	else if(Editor.typeLineNumber == RELATIVE)
-		sprintf(lineNumber, "%d", abs(Editor.cursorY - posY));
+	{
+		if(numAbs)
+			sprintf(lineNumber, "%*d", numDigitsPadding, numAbs);
+		else
+			sprintf(lineNumber, "%*d", numDigitsPadding, posY);			
+	}
 
-	//lineNumber[Editor.numRows] = '\0';
-
-	appendBufferAppend(ab, lineNumber, 4);
-	appendBufferAppend(ab, " ", 1);
-	return p;
+	appendBufferAppend(ab, lineNumber, numDigitsPadding);
+	free(lineNumber);
+	return numDigitsPadding;
 }
 
 void editorDrawRows(struct appendBuffer *ab) {
@@ -451,8 +453,9 @@ void editorDrawRows(struct appendBuffer *ab) {
 		if(Editor.typeLineNumber != -1 && fileRow < Editor.numRows)
 		{
 			printTilde = 0;
-			int z = addLineNumber(ab, fileRow);
-			printf("%d, ", z);
+			int z = addLineNumber(ab, y);
+			Editor.cursorStartingColumn = 4;
+			printf("%d ", Editor.cursorStartingColumn);
 		}
 
 		if(fileRow >= Editor.numRows)
@@ -526,6 +529,9 @@ void editorScroll()
 		Editor.columnOffset = Editor.rowX;
 	if(Editor.rowX >= Editor.columnOffset + Editor.screenColumns)
 		Editor.columnOffset = Editor.rowX - Editor.screenColumns + 1;
+
+	if(Editor.cursorStartingColumn)
+		Editor.cursorX = Editor.cursorStartingColumn;
 }
 
 void editorRefreshScreen() 
@@ -608,9 +614,7 @@ void editorInsertChar(int c)
 void editorInsertNewLine()
 {
 	if(Editor.cursorX == 0)
-	{
 		editorInsertRow(Editor.cursorY, "", 0);
-	}
 	else
 	{
 		erow *row = &Editor.row[Editor.cursorY];
@@ -816,7 +820,7 @@ void editorMoveCursor(int key)
 			else if(row && Editor.cursorX == row->size)		//Go to start of a line
 			{
 				Editor.cursorY++;
-				Editor.cursorX = 0;
+				Editor.cursorX = Editor.cursorStartingColumn;
 			}
 			break;
 		case ARROW_UP:
@@ -920,6 +924,7 @@ void initEditor()
 	Editor.cursorX = 0;
 	Editor.cursorY = 0;
 	Editor.numRows = 0;
+	Editor.cursorStartingColumn = 0;
 	Editor.typeLineNumber = -1;
 	Editor.rowOffset = 0;
 	Editor.rowX = 0;

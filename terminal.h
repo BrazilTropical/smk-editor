@@ -35,6 +35,7 @@ struct editorConf
 	int cursorX, cursorY;
 	int typeLineNumber;
 	int lineNumberSize;
+	int cursorStartingColumn;
 	int rowX;
 	int rowOffset;
 	int columnOffset;
