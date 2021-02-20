@@ -90,7 +90,7 @@ void editorOpenPromptFile()
 
 void editorSetLineNumber()
 {
-	char* type = editorPrompt("Type of line number (absolute/relative/off): ", NULL);
+	char* type = editorPrompt("Type (absolute/relative/off): %s", NULL);
 
 	if(type)
 	{
@@ -416,36 +416,43 @@ void getWindowSize(int *rows, int *cols)
 //** Output  **///
 //*************///
 
-void addLineNumber(struct appendBuffer *ab, int posY)
+int addLineNumber(struct appendBuffer *ab, int posY)
 {
 	char lineNumber[Editor.numRows];
 	char* numRowsToASCII = itoa(Editor.numRows, 10);
 	int padding = strlen(numRowsToASCII);
+	int p = padding;
+	Editor.cursorX = p;
+
+	while(padding-- != (int)strlen(lineNumber))
+		appendBufferAppend(ab, " ", 1);
 
 	if(Editor.typeLineNumber == ABSOLUTE)
 		sprintf(lineNumber, "%d", posY);
 	else if(Editor.typeLineNumber == RELATIVE)
 		sprintf(lineNumber, "%d", abs(Editor.cursorY - posY));
 
-	while(padding-- != (int)strlen(lineNumber))
-		appendBufferAppend(ab, " ", 1);
+	//lineNumber[Editor.numRows] = '\0';
 
 	appendBufferAppend(ab, lineNumber, 4);
 	appendBufferAppend(ab, " ", 1);
+	return p;
 }
 
 void editorDrawRows(struct appendBuffer *ab) {
 	int y;
-	int printTilde = 1;
+	int printTilde;
 
 	for (y = 0; y < Editor.screenRows; ++y) 
 	{
 		int fileRow = y + Editor.rowOffset;
+		printTilde = 1;
 
-		if(Editor.typeLineNumber != -1)
+		if(Editor.typeLineNumber != -1 && fileRow < Editor.numRows)
 		{
-			addLineNumber(ab, fileRow);
 			printTilde = 0;
+			int z = addLineNumber(ab, fileRow);
+			printf("%d, ", z);
 		}
 
 		if(fileRow >= Editor.numRows)
@@ -922,6 +929,7 @@ void initEditor()
 	Editor.statusmsg[0] = '\0';
 	Editor.statusmsg_time = 0;
 	Editor.dirty = 0;
+	Editor.lineNumberSize = 0;
 	getWindowSize(&Editor.screenRows, &Editor.screenColumns);
 	Editor.screenRows -= 2;
 }
