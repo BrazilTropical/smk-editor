@@ -28,11 +28,13 @@ typedef struct erow
 	int rowSize;
 	char *chars;
 	char *render;	//rendering tabs
+	unsigned char *highLight;
 } erow;
 
 struct editorConf
 {
 	int cursorX, cursorY;
+	int minCursorX;
 	int typeLineNumber;
 	int lineNumberSize;
 	int cursorStartingColumn;
@@ -51,7 +53,7 @@ struct editorConf
 };
 
 void editorSave();
-void initEditor();
+//void initEditor();
 void editorFind();
 int editorReadKey();
 void editorScroll();
@@ -73,6 +75,8 @@ char* itoa(int val, int base);
 void editorMoveCursor(int key);
 void editorUpdateRow(erow *row);
 void editorOpen(char *filename);
+void editorUpdateSyntax(erow *row);
+int editorSyntaxToColor(int highLight);
 void editorRowDelChar(erow *row, int at);
 char *editorRowsToString(int *bufferLen);
 void getWindowSize(int *rows, int *cols);

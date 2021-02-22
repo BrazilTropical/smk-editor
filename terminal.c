@@ -1,10 +1,11 @@
 #include "terminal.h"
+#include "editor.h"
 
 #define CTRL_KEY(k) ((k) & 0x1f) //CTRL + q to quit
 #define TAB_SIZE 8
 #define ABUF_INIT 	{NULL, 0}
 #define QUIT_TIMES 3
-#define VERSION "0.0.0"
+#define VERSION "0.0.5"
 #define ABSOLUTE 1
 #define RELATIVE 0
 #define OFF -1
@@ -23,6 +24,13 @@ enum editorKey
 	END_KEY,
 	PAGE_UP,
 	PAGE_DOWN
+};
+
+enum editorHighlight
+{
+	HL_NORMAL = 0,
+	HL_NUMBER,
+	HL_MATCH
 };
 
 struct editorConf Editor;
@@ -417,6 +425,34 @@ void getWindowSize(int *rows, int *cols)
 //** Output  **///
 //*************///
 
+void editorUpdateSyntax(erow *row)
+{
+	row->highLight = realloc(row->highLight, row->rowSize);
+	memset(row->highLight, HL_NORMAL, row->rowSize);
+
+	int i;
+
+	for(i = 0; i < row->rowSize; ++i)
+	{
+		if(isdigit(row->render[i]))
+			row->highLight[i] = HL_NUMBER;
+	}
+
+}
+
+int editorSyntaxToColor(int highLight)
+{
+	switch(highLight)
+	{
+		case HL_NUMBER : 
+			return 31;		//red
+		case HL_MATCH:
+			return 34;
+		default:
+			return 37;		//default white
+	}
+}
+
 int addLineNumber(struct appendBuffer *ab, int posY)
 {
 	char* numRowsToASCII = itoa(Editor.numRows, 10);
@@ -453,7 +489,7 @@ void editorDrawRows(struct appendBuffer *ab) {
 		if(Editor.typeLineNumber != -1 && fileRow < Editor.numRows)
 		{
 			printTilde = 0;
-			int z = addLineNumber(ab, y);
+			int z = addLineNumber(ab, fileRow);
 			Editor.cursorStartingColumn = 4;
 			printf("%d ", Editor.cursorStartingColumn);
 		}
@@ -494,18 +530,35 @@ void editorDrawRows(struct appendBuffer *ab) {
 
 			//colors
 			char *c = &Editor.row[fileRow].render[Editor.columnOffset];
+			unsigned char *hl = &Editor.row[fileRow].highLight[Editor.columnOffset];
+			int currentColor = -1;
+
 			int j;
 			for(j = 0; j < len; ++j)
 			{
-				if(isdigit(c[j]))
+				if(hl[j] == HL_NORMAL)
 				{
-					appendBufferAppend(ab, "\x1b[31m", 5);	//red
-					appendBufferAppend(ab, &c[j], 1);		//digit
-					appendBufferAppend(ab, "\x1b[39m", 5);	//white
+					if(currentColor != -1)
+					{					
+						appendBufferAppend(ab, "\x1b[39m", 5);	//white
+						currentColor = -1;
+					}
+					appendBufferAppend(ab, &c[j], 1);
 				}
 				else
-					appendBufferAppend(ab, &c[j], 1);
+				{
+					int color = editorSyntaxToColor(hl[j]);
+					if(color != currentColor)
+					{
+						currentColor = color;
+						char buf[16];
+						int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", color);
+						appendBufferAppend(ab, buf, clen);
+						appendBufferAppend(ab, &c[j], 1);
+					}
+				}
 			}
+			appendBufferAppend(ab, "\x1b[39m", 5);
 		}
 
 		appendBufferAppend(ab, "\x1b[K", 3);
@@ -574,7 +627,6 @@ void editorInsertRow(int at, char *string, size_t len)
 	if(at < 0 || at > Editor.numRows)
 		return;
 
-
 	Editor.row = realloc(Editor.row, sizeof(erow) * (Editor.numRows + 1));
 	memmove(&Editor.row[at + 1], &Editor.row[at], sizeof(erow) * (Editor.numRows - at));
 
@@ -585,6 +637,7 @@ void editorInsertRow(int at, char *string, size_t len)
 
 	Editor.row[at].rowSize = 0;
 	Editor.row[at].render = NULL;
+	Editor.row[at].highLight = NULL;
 	editorUpdateRow(&Editor.row[at]);
 
 	Editor.numRows++;
@@ -630,9 +683,9 @@ void editorInsertNewLine()
 
 void editorFreeRow(erow *row)
 {
-	if(row->render != NULL)
-		free(row->render);
+	free(row->render);
 	free(row->chars);
+	free(row->highLight);
 }
 
 //Deletes row using memmove
@@ -718,6 +771,8 @@ void editorUpdateRow(erow *row)
 	}
 	row->render[idx] = '\0';
 	row->rowSize = idx; 
+
+	editorUpdateSyntax(row);
 }
 
 //converts a chars index to a render index
@@ -886,6 +941,7 @@ void editorFindCallback(char *query, int key)
 			Editor.cursorY = current;
 			Editor.cursorX = editorRowRenderXToCursorX(row, match - row->render);
 			Editor.rowOffset = Editor.numRows;
+			memset(&row->highLight[match - row->render], HL_MATCH, strlen(query));
 			break;
 		}
 	}
@@ -919,6 +975,7 @@ void editorFind()
 //*** Init	***///
 //*************///
 
+
 void initEditor()
 {
 	Editor.cursorX = 0;
@@ -938,6 +995,7 @@ void initEditor()
 	getWindowSize(&Editor.screenRows, &Editor.screenColumns);
 	Editor.screenRows -= 2;
 }
+
 
 
 char* itoa(int val, int base)
