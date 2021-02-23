@@ -1,9 +1,8 @@
 #include "terminal.h"
-#include "editor.h"
 
 #define CTRL_KEY(k) ((k) & 0x1f) //CTRL + q to quit
 #define TAB_SIZE 8
-#define ABUF_INIT 	{NULL, 0}
+#define ABUF_INIT {NULL, 0}
 #define QUIT_TIMES 3
 #define VERSION "0.0.5"
 #define ABSOLUTE 1

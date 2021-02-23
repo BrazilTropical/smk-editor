@@ -53,7 +53,7 @@ struct editorConf
 };
 
 void editorSave();
-//void initEditor();
+void initEditor();
 void editorFind();
 int editorReadKey();
 void editorScroll();
